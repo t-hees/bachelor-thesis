@@ -20,7 +20,6 @@ object Serializing:
         case Some(funcidx) => Some(Section.Start(funcidx))
         case None => None,
       Some(Section.Elements(module.elem)),
-      // datacount section might be necessary here
       Some(Section.Code(module.funcs.map {
         case Func(_, locals, body) =>
           val locs = locals.foldLeft(Vector.empty[LocalEntry]) {
