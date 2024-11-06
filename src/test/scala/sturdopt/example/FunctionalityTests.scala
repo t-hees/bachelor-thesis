@@ -13,7 +13,7 @@ import sturdopt.optimizations.DeadcodeOptimization
 class FunctionalityTests extends org.scalatest.funsuite.AnyFunSuite {
   test("Serializer test") {
     val uri = this.getClass.getResource("/sturdopt/example").toURI
-    Files.list(Paths.get(uri)).toScala(List).filter(p => p.toString.endsWith(".wasm")).sorted.headOption.foreach { p =>
+    Files.list(Paths.get(uri)).toScala(List).filter(p => p.toString.endsWith(".wasm")).sorted.foreach { p =>
       val mod = Parsing.fromBinary(p)
       val mod_bytes = Serializing.serialize(mod).toArray
       assert(mod == Parsing.fromBytes(mod_bytes))
@@ -22,8 +22,9 @@ class FunctionalityTests extends org.scalatest.funsuite.AnyFunSuite {
 
   test("Deadcode test") {
     val uri = this.getClass.getResource("/sturdopt/example").toURI
-    Files.list(Paths.get(uri)).toScala(List).filter(p => p.toString.endsWith(".wasm")).sorted.headOption.foreach { p =>
+    Files.list(Paths.get(uri)).toScala(List).filter(p => p.toString.endsWith(".wasm")).sorted.foreach { p =>
       val mod = Parsing.fromBinary(p)
+      println(mod)
       println(DeadcodeOptimization.eliminateDeadcode(mod))
 
     }

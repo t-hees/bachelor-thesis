@@ -1,6 +1,7 @@
 package sturdopt.optimizations
 
 import sturdopt.util.CfgRelatedMethods
+import sturdopt.visitors.DeadcodeEliminator
 import swam.ModuleLoader
 import swam.binary.ModuleParser
 import swam.syntax.{Func, Module}
@@ -29,18 +30,9 @@ object DeadcodeOptimization:
     val deadInstructions = ControlFlow.deadInstruction(cfg, List(modInst))
     val allLabels = allNodes.filter(_.isInstanceOf[CfgNode.Labled])
     val deadLabels = ControlFlow.deadLabels(cfg)
-    println(allInstructions)
     println(deadInstructions)
     println(deadLabels)
-    // TODO This could probably be optimized
-    println(mod)
-    val instPositions = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
-
-    mod.copy(funcs = mod.funcs.zipWithIndex.map((f, f_idx) =>
-      if (instPositions.keySet.contains(f_idx)) {
-        Func(f.tpe, f.locals, f.body.indices.collect {
-          case f_inst_idx if instPositions(f_idx).contains(f_inst_idx) => f.body(f_inst_idx)
-        }.toVector)
-      }
-      else f
-      ))
+    val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
+    val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
+    
+    DeadcodeEliminator(deadFuncInstrMap, deadLabelMap).visitModule(mod)
