@@ -1,14 +1,34 @@
 package sturdopt.visitors
 
 import sturdy.language.wasm.abstractions.CfgNode
-import sturdopt.util.{FuncIdx, LabelInst, FuncInstrMap, FuncLabelMap, InstrIdx}
+import sturdopt.util.{FuncIdx, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.syntax
-import swam.syntax.{Drop, If, Inst}
+import swam.syntax.{Block, Call, Drop, Func, If, Inst, Loop}
 
-/*
-  funcInstrLocs are the instructions to be removed
+/**
+  @param funcInstrLocs A Map representing the instructions to be removed
+  @param deadLabelMap A Map representing the dead labels
+  @return The module with removed deadcode
  */
 class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap) extends BaseModuleVisitor:
+
+  val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
+    // A function is dead if it's first instruction is dead
+    case (funcIdx: FuncIdx, instrIndices: Seq[InstrIdx]) if instrIndices.contains(0) => funcIdx
+  }.toSeq
+
+  /**
+    shifts funcIdx to account for the removal of deadFunctions
+   */
+  private def shiftFuncIdx(funcIdx: FuncIdx) = funcIdx - deadFunctions.count(_ < funcIdx)
+
+  override def visitFunc(func: Func, funcIdx: Int): Seq[Func] =
+    // remove dead functions in this step to keep the old funcIdx before removal intact as those are the ones referenced
+    // in funcInstrLocs and deadLabelMap
+    if deadFunctions.contains(funcIdx) then Seq()
+    else
+      funcPc = -1
+      Seq(Func(func.tpe, func.locals.flatMap(visitFuncLocal(_, funcIdx)), func.body.flatMap(visitFuncInstr(_, funcIdx))))
 
   override def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx): Seq[Inst] =
     funcPc += 1
@@ -18,6 +38,15 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
         case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.If).contains(funcPc) =>
           Seq(Drop) ++ (thenInstr++elseInstr).flatMap(visitFuncInstr(_, funcIdx))
         case _ => Seq(If(tpe, thenInstr.flatMap(visitFuncInstr(_, funcIdx)), elseInstr.flatMap(visitFuncInstr(_, funcIdx))))
+      case Block(tpe, blockInstr) => deadLabelMap.get(funcIdx) match
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.Block).contains(funcPc) =>
+          blockInstr.flatMap(visitFuncInstr(_, funcIdx))
+        case _ => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx))))
+      case Loop(tpe, loopInstr) => deadLabelMap.get(funcIdx) match
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.Loop).contains(funcPc) =>
+          loopInstr.flatMap(visitFuncInstr(_, funcIdx))
+        case _ => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
+      case Call(callFuncidx: FuncIdx) => Seq(Call(shiftFuncIdx(callFuncidx)))
       case _ => funcInstrLocs.get(funcIdx) match
         case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc) => Seq.empty[Inst]
         case _ => Seq(funcInstr)

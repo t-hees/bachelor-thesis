@@ -19,12 +19,18 @@ object CfgRelatedMethods {
    * Map[FuncIdx, Seq[pc in function body]]
    */
   def getInstNodeLocation(nodes: Set[CfgNode]): FuncInstrMap = nodes.foldLeft(Map.empty[FuncIdx, Seq[InstrIdx]]) {
-    case (acc, CfgNode.Instruction(inst, loc)) => loc match
-      case InFunction(func, pc) =>
-        val indices = acc.getOrElse(func.funcIx, Seq.empty[InstrIdx])
-        acc.updated(func.funcIx, indices.appended(pc))
-      case _ => ???
-    case _ => throw IllegalArgumentException(s"$nodes should only contain Instructions!")
+    case (acc, cfgnode) =>
+      val instLoc = cfgnode match
+        case CfgNode.Instruction(_, loc) => loc
+        case CfgNode.Call(_, loc) => loc
+        case CfgNode.Labled(_, loc) => loc
+        case other: CfgNode => throw IllegalArgumentException(s"$other is not an instruction!")
+      instLoc match
+        // TODO Implement with InInit which would be the _start function
+        case InFunction(func, pc) =>
+          val indices = acc.getOrElse(func.funcIx, Seq.empty[InstrIdx])
+          acc.updated(func.funcIx, indices.appended(pc))
+        case _ => ???
   }
 
   def getLabledInstLocation(nodes: Set[CfgNode.Labled]): FuncLabelMap = nodes.foldLeft(Map.empty[FuncIdx, Map[LabelInst, Seq[InstrIdx]]]) {
@@ -35,6 +41,7 @@ object CfgRelatedMethods {
         case ifs: swam.syntax.If => LabelInst.If
 
       loc match
+        // TODO Implement with InInit which would be the _start function
         case InFunction(func, pc) =>
           val funcMap = acc.getOrElse(func.funcIx, Map(LabelInst.Block -> Seq.empty[InstrIdx],
             LabelInst.Loop -> Seq.empty[InstrIdx],
