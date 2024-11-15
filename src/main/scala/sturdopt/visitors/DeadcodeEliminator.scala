@@ -3,7 +3,7 @@ package sturdopt.visitors
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdopt.util.{FuncIdx, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.syntax
-import swam.syntax.{Block, Call, Drop, Func, If, Inst, Loop}
+import swam.syntax.{Block, Call, Drop, Export, Func, If, Inst, Loop}
 
 /**
   @param funcInstrLocs A Map representing the instructions to be removed
@@ -22,6 +22,13 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
    */
   private def shiftFuncIdx(funcIdx: FuncIdx) = funcIdx - deadFunctions.count(_ < funcIdx)
 
+  /**
+   * Checks if Instruction at current funcPC in funcIdx is dead
+   */
+  private def instrIsDead(funcIdx: FuncIdx): Boolean = funcInstrLocs.get(funcIdx) match
+    case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc) => true
+    case _ => false
+
   override def visitFunc(func: Func, funcIdx: Int): Seq[Func] =
     // remove dead functions in this step to keep the old funcIdx before removal intact as those are the ones referenced
     // in funcInstrLocs and deadLabelMap
@@ -35,18 +42,21 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
     funcInstr match
       // TODO Instead of using drop to recover the correct stack the instructions that pushed the value on the top of the stack should be removed
       case If(tpe, thenInstr, elseInstr) => deadLabelMap.get(funcIdx) match
-        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.If).contains(funcPc) =>
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc) || instrIsDead(funcIdx)) =>
           Seq(Drop) ++ (thenInstr++elseInstr).flatMap(visitFuncInstr(_, funcIdx))
         case _ => Seq(If(tpe, thenInstr.flatMap(visitFuncInstr(_, funcIdx)), elseInstr.flatMap(visitFuncInstr(_, funcIdx))))
       case Block(tpe, blockInstr) => deadLabelMap.get(funcIdx) match
-        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.Block).contains(funcPc) =>
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.Block).contains(funcPc) || instrIsDead(funcIdx))  =>
           blockInstr.flatMap(visitFuncInstr(_, funcIdx))
         case _ => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx))))
       case Loop(tpe, loopInstr) => deadLabelMap.get(funcIdx) match
-        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if instrLocMap(LabelInst.Loop).contains(funcPc) =>
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.Loop).contains(funcPc) || instrIsDead(funcIdx)) =>
           loopInstr.flatMap(visitFuncInstr(_, funcIdx))
         case _ => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
       case Call(callFuncidx: FuncIdx) => Seq(Call(shiftFuncIdx(callFuncidx)))
-      case _ => funcInstrLocs.get(funcIdx) match
-        case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc) => Seq.empty[Inst]
-        case _ => Seq(funcInstr)
+      case _ =>
+        if instrIsDead(funcIdx) then Seq.empty[Inst]
+        else Seq(funcInstr)
+
+  override def visitExport(exprt: Export): Seq[Export] = Seq(Export(exprt.fieldName, exprt.kind, shiftFuncIdx(exprt.index)))
+  // TODO Elem for tables probably have to be shifted
