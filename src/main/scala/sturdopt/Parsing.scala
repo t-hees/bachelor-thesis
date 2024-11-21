@@ -24,7 +24,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.duration.FiniteDuration
 
 object Parsing:
-  class WasmParseError(msg: String) extends Exception(msg)
+  class WasmParseTimeout(msg: String) extends Exception(msg)
 
   def fromText(path: Path): Module =
     implicit val cs: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
@@ -37,7 +37,7 @@ object Parsing:
         } yield mod
       }.timeout(FiniteDuration(10, "s")).unsafeRunSync()
     } catch {
-      case e: TimeoutException => throw new WasmParseError(s"Parsing of $path timed out")
+      case e: TimeoutException => throw new WasmParseTimeout(s"Parsing of $path timed out")
     }
 
   def fromBinary(path: Path): Module =
@@ -53,7 +53,7 @@ object Parsing:
         } yield mod
       }.timeout(FiniteDuration(10, "s")).unsafeRunSync()
     } catch {
-      case e: TimeoutException => throw new WasmParseError(s"Parsing of $path timed out")
+      case e: TimeoutException => throw new WasmParseTimeout(s"Parsing of $path timed out")
     }
 
   def fromBytes(bytes: Array[Byte]): Module =
@@ -69,7 +69,7 @@ object Parsing:
         } yield mod
       }.timeout(FiniteDuration(10, "s")).unsafeRunSync()
     } catch {
-      case e: TimeoutException => throw new WasmParseError(s"Parsing timed out")
+      case e: TimeoutException => throw new WasmParseTimeout(s"Parsing timed out")
     }
 
   def fromUnresolved(mod: unresolved.Module): Module =
@@ -83,6 +83,6 @@ object Parsing:
         } yield mod
       }.timeout(FiniteDuration(10, "s")).unsafeRunSync()
     } catch {
-      case e: TimeoutException => throw new WasmParseError(s"Parsing of ${mod.id} timed out")
+      case e: TimeoutException => throw new WasmParseTimeout(s"Parsing of ${mod.id} timed out")
     }
     

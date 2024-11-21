@@ -2,7 +2,7 @@ package sturdopt.visitors
 
 import sturdopt.util.{FuncIdx, InstrIdx}
 import swam.{FuncType, ValType}
-import swam.syntax.{Export, Func, Global, Import, Inst, Module}
+import swam.syntax.{Elem, Export, Func, Global, Import, Inst, Module}
 
 trait BaseModuleVisitor:
   
@@ -15,7 +15,7 @@ trait BaseModuleVisitor:
       mod.tables,
       mod.mems,
       mod.globals.flatMap(visitGlobal),
-      mod.elem,
+      mod.elem.flatMap(visitElem),
       mod.data,
       mod.start,
       mod.imports.flatMap(visitImport),
@@ -39,3 +39,7 @@ trait BaseModuleVisitor:
   def visitImport(imprt: Import): Seq[Import] = Seq(imprt)
 
   def visitExport(exprt: Export): Seq[Export] = Seq(exprt)
+  
+  def visitElem(elem: Elem): Seq[Elem] = Seq(Elem(elem.table, elem.offset, elem.init.flatMap(visitElemInit)))
+  
+  def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] = Seq(funcidx)

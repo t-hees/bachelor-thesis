@@ -59,4 +59,6 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
         else Seq(funcInstr)
 
   override def visitExport(exprt: Export): Seq[Export] = Seq(Export(exprt.fieldName, exprt.kind, shiftFuncIdx(exprt.index)))
-  // TODO Elem for tables probably have to be shifted
+
+  // TODO Just shifting the funcidx in elem is probably not enough. Test what happens if funcidx points to non existing function
+  override def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] = Seq(shiftFuncIdx(funcidx))
