@@ -2,8 +2,8 @@ package sturdopt.visitors
 
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdopt.util.{FuncIdx, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
-import swam.syntax
-import swam.syntax.{Block, Call, Drop, Export, Func, If, Inst, Loop}
+import swam.{LabelIdx, syntax}
+import swam.syntax.{Block, Br, BrIf, BrTable, Call, Drop, Export, Func, If, Inst, Loop}
 
 /**
   @param funcInstrLocs A Map representing the instructions to be removed
@@ -29,36 +29,60 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
     case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc) => true
     case _ => false
 
+  private def flattenLabelIdx(lbl: LabelIdx, lblDepth: Int, deadLblbDepths: Vector[Int]) =
+    lbl - deadLblbDepths.count(_ >= lblDepth-lbl)
+
   override def visitFunc(func: Func, funcIdx: Int): Seq[Func] =
     // remove dead functions in this step to keep the old funcIdx before removal intact as those are the ones referenced
     // in funcInstrLocs and deadLabelMap
     if deadFunctions.contains(funcIdx) then Seq()
     else
       funcPc = -1
-      Seq(Func(func.tpe, func.locals.flatMap(visitFuncLocal(_, funcIdx)), func.body.flatMap(visitFuncInstr(_, funcIdx))))
+      Seq(Func(func.tpe, func.locals.flatMap(visitFuncLocal(_, funcIdx)), func.body.flatMap(visitFuncInstr(_, funcIdx, 0))))
 
-  override def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx): Seq[Inst] =
+  override def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx, lblDepth: Int = 0, deadLblDepths: Vector[Int] = Vector.empty[Int]): Seq[Inst] =
     funcPc += 1
     funcInstr match
       // TODO Instead of using drop to recover the correct stack the instructions that pushed the value on the top of the stack should be removed
       case If(tpe, thenInstr, elseInstr) => deadLabelMap.get(funcIdx) match
-        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc) || instrIsDead(funcIdx)) =>
-          Seq(Drop) ++ (thenInstr++elseInstr).flatMap(visitFuncInstr(_, funcIdx))
-        case _ => Seq(If(tpe, thenInstr.flatMap(visitFuncInstr(_, funcIdx)), elseInstr.flatMap(visitFuncInstr(_, funcIdx))))
+        // If the if instruction is dead it is never reached and we don't need to add a drop
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrIsDead(funcIdx)) =>
+          (thenInstr++elseInstr).flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+        // If just the label of the if instruction is dead it is reached but defaults to one case. Here we need a drop
+        case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc)) =>
+          Seq(Drop) ++ (thenInstr++elseInstr).flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+        case _ => Seq(If(tpe,
+          thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths)),
+          elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))))
+
       case Block(tpe, blockInstr) => deadLabelMap.get(funcIdx) match
         case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.Block).contains(funcPc) || instrIsDead(funcIdx))  =>
-          blockInstr.flatMap(visitFuncInstr(_, funcIdx))
-        case _ => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx))))
+          blockInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+        case _ => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))))
+
       case Loop(tpe, loopInstr) => deadLabelMap.get(funcIdx) match
         case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.Loop).contains(funcPc) || instrIsDead(funcIdx)) =>
-          loopInstr.flatMap(visitFuncInstr(_, funcIdx))
-        case _ => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
+          loopInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+        case _ => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))))
+
+      case _ if instrIsDead(funcIdx) => Seq.empty[Inst]
+
       case Call(callFuncidx: FuncIdx) => Seq(Call(shiftFuncIdx(callFuncidx)))
-      case _ =>
-        if instrIsDead(funcIdx) then Seq.empty[Inst]
-        else Seq(funcInstr)
+      case Br(lbl: LabelIdx) => Seq(Br(flattenLabelIdx(lbl, lblDepth, deadLblDepths)))
+      // If the BrIf references a dead label then we know it is never executed and can be removed
+      case BrIf(lbl: LabelIdx) =>
+        if (deadLblDepths.contains(lblDepth-lbl)) then
+          Seq(Drop)
+        else
+          Seq(BrIf(flattenLabelIdx(lbl, lblDepth, deadLblDepths)))
+      case BrTable(table: Vector[LabelIdx], lbl: LabelIdx) =>
+        Seq(BrTable(table.map(flattenLabelIdx(_, lblDepth, deadLblDepths)), flattenLabelIdx(lbl, lblDepth, deadLblDepths)))
+
+      case _ => Seq(funcInstr)
 
   override def visitExport(exprt: Export): Seq[Export] = Seq(Export(exprt.fieldName, exprt.kind, shiftFuncIdx(exprt.index)))
 
-  // TODO Just shifting the funcidx in elem is probably not enough. Test what happens if funcidx points to non existing function
-  override def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] = Seq(shiftFuncIdx(funcidx))
+  override def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] =
+    // If the function is dead anyways then it doen't matter to which function this elem points to (so we choose 0)
+    if deadFunctions.contains(funcidx) then Seq(0)
+    else Seq(shiftFuncIdx(funcidx))

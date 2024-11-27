@@ -1,8 +1,8 @@
 package sturdopt.visitors
 
 import sturdopt.util.{FuncIdx, InstrIdx}
-import swam.{FuncType, ValType}
-import swam.syntax.{Elem, Export, Func, Global, Import, Inst, Module}
+import swam.{FuncType, LabelIdx, ValType}
+import swam.syntax.{Br, BrIf, BrTable, Elem, Export, Func, Global, Import, Inst, Module}
 
 trait BaseModuleVisitor:
   
@@ -30,7 +30,7 @@ trait BaseModuleVisitor:
 
   def visitFuncLocal(local: ValType, funcIdx: FuncIdx): Seq[ValType] = Seq(local)
 
-  def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx): Seq[Inst] =
+  def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx, lblDepth: Int = 0, deadLblDepths: Vector[Int] = Vector.empty[Int]): Seq[Inst] =
     funcPc += 1
     Seq(funcInstr)
 
