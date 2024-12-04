@@ -30,7 +30,7 @@ trait BaseModuleVisitor:
 
   def visitFuncLocal(local: ValType, funcIdx: FuncIdx): Seq[ValType] = Seq(local)
 
-  def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx): Seq[Inst] =
+  def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx, lblDepth: Int = 0, deadLblDepths: Vector[Int] = Vector.empty[Int]): Seq[Inst] =
     funcPc += 1
     Seq(funcInstr)
 

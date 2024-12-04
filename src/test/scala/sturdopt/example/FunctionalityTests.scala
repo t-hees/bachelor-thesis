@@ -12,7 +12,7 @@ import sturdopt.optimizations.DeadcodeOptimization
 class FunctionalityTests extends org.scalatest.funsuite.AnyFunSuite {
   val consideredFilesNames = Files.lines(Paths.get(this.getClass.getResource("/wasmbench-considered-files-60s.txt").toURI)).toArray.map(_.toString)
   val wasmbenchFiles = Files.list(Paths.get(this.getClass.getResource("/wasmbench/filtered").toURI))
-    .toScala(List).filter(p => consideredFilesNames.exists(p.endsWith(_))).sorted
+    .toScala(List).filter(p => consideredFilesNames.exists(p.endsWith(_))).sorted((a, b) => java.lang.Long.compare(Files.size(a), Files.size(b)))
   val manualTestFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/example").toURI))
     .toScala(List).filter(p => p.toString.endsWith(".wasm")).sorted
   val testFiles = manualTestFiles ++ wasmbenchFiles
