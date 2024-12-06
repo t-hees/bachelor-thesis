@@ -30,8 +30,8 @@ object DeadcodeOptimization:
     val deadInstructions = ControlFlow.deadInstruction(cfg, List(modInst))
     val allLabels = allNodes.filter(_.isInstanceOf[CfgNode.Labled])
     val deadLabels = ControlFlow.deadLabels(cfg)
-    println(deadInstructions)
-    println(deadLabels)
+    println(s"Dead instructions: ${deadInstructions}")
+    println(s"Dead labels: ${deadLabels}")
     val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
     val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
     

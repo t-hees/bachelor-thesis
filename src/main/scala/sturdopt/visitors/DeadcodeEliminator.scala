@@ -62,11 +62,12 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
           (thenInstr ++ elseInstr).foreach(visitFuncInstrCounter)
           Seq.empty[Inst]
         else
+          val ifPC = funcPc
           val optThenInstr = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
           val optElseInstr = elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
           if (optThenInstr.isEmpty || optElseInstr.isEmpty) then deadLabelMap.get(funcIdx) match
             // If just the label of the if instruction is dead it is reached but defaults to one case. Here we need a drop
-            case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc)) =>
+            case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(ifPC)) =>
               Seq(Drop) ++ (optThenInstr++optElseInstr).flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
             case _ =>
               // If the if instruction is neither dead nor its label but one of the branches is empty, then it can be removed
