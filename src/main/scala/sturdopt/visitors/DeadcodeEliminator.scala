@@ -3,7 +3,7 @@ package sturdopt.visitors
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdopt.util.{FuncIdx, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.{LabelIdx, syntax}
-import swam.syntax.{Block, Br, BrIf, BrTable, Call, Drop, Export, Func, If, Inst, Loop}
+import swam.syntax.{Block, Br, BrIf, BrTable, Call, Drop, Export, Func, If, Elem, Inst, Loop, i32, GlobalGet}
 
 /**
   @param funcInstrLocs A Map representing the instructions to be removed
@@ -110,7 +110,27 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
 
   override def visitExport(exprt: Export): Seq[Export] = Seq(Export(exprt.fieldName, exprt.kind, shiftFuncIdx(exprt.index)))
 
-  override def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] =
-    // If the function is dead anyways then it doen't matter to which function this elem points to (so we choose 0)
-    if deadFunctions.contains(funcidx) then Seq(0)
-    else Seq(shiftFuncIdx(funcidx))
+  /**
+   * Shift the elem function reference indices and use offsets to keep them in the same position in the table
+   * while removing the dead references from the table.
+   */
+  override def visitElem(elem: Elem): Seq[Elem] =
+    elem.init.zipWithIndex.foldLeft(Seq[Option[Elem]](None)) {
+      case (acc: Seq[Option[Elem]], (funcIdx: FuncIdx, elemIdx: Int)) =>
+        if deadFunctions.contains(funcIdx) then
+          acc.appended(None)
+        else
+          acc.updated(acc.size-1, acc.last match
+            case Some(lastElem: Elem) => Some(Elem(lastElem.table, lastElem.offset, lastElem.init.appended(shiftFuncIdx(funcIdx))))
+            case None =>
+              if elemIdx == 0 then
+                Some(Elem(elem.table, elem.offset, Vector(shiftFuncIdx(funcIdx))))
+              else
+                // Per spec the offset can only be a single constant vector. Imported immutable globals are also allowed which could
+                // cause an error here. This is okay for now since imports are not supported by the optimization yet
+                val newOffset = elem.offset match
+                  case Vector(i32.Const(value: Int)) => Vector(i32.Const(value+elemIdx))
+                  case Vector(glob: GlobalGet) => throw new IllegalArgumentException("Imported global in elem not allowed for this optimization!")
+                Some(Elem(elem.table, newOffset, Vector(shiftFuncIdx(funcIdx))))
+          )
+    }.flatten

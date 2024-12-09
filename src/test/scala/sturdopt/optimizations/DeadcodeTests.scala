@@ -13,6 +13,8 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
     deadcodeFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val result = DeadcodeOptimization.eliminateDeadcode(Parsing.fromText(p))
+      println(result)
+      prettyPrintModule(result)
       val expected = Parsing.fromText(Paths.get(p.toString + ".expected"))
       assert(result == expected)
     }
@@ -26,7 +28,7 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
         //prettyPrintModule(mod)
         val result = DeadcodeOptimization.eliminateDeadcode(mod)
         //prettyPrintModule(result)
-        val reparsedResult = Parsing.fromBytes(Serializing.serialize(result).toArray)
+        val reparsedResult = Parsing.fromBytes(Serializing.serialize(result))
       } catch {
         case e: WasmParseTimeout => println("Parsing timed out")
       }
@@ -34,12 +36,16 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
   }
 
   test("Write to file test") {
-    wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>
-      println(s"${idx}/${wasmbenchFiles.size-1}: $p")
+    deadcodeFiles.zipWithIndex.foreach { (p, idx) =>
+      println(s"${idx}/${deadcodeFiles.size-1}: $p")
       val output_path = p.toString + ".optimized"
-      val mod = Parsing.fromBinary(p)
+      val mod = Parsing.fromText(p)
       val result = DeadcodeOptimization.eliminateDeadcode(mod)
-      Files.write(Paths.get(output_path), Serializing.serialize(result).toArray, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+      Files.write(Paths.get(output_path), Serializing.serialize(result))
     }
+  }
+
+  test("randomtest") {
+    println(Seq(Some(3), None, Some(3)).appended(None))
   }
 }

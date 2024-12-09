@@ -3,12 +3,11 @@ package sturdopt
 import swam.syntax.{Func, FuncBody, LocalEntry, Module, Section, pretty}
 import swam.binary.ModuleStream
 import swam.binary.WasmCodec
-import scodec.bits.ByteVector
+import scodec.bits.BitVector
 import swam.util.pretty.newline
 
 object Serializing:
-  def serialize(module: Module): ByteVector =
-    var result: ByteVector = ModuleStream.header
+  def serialize(module: Module): Array[Byte] =
     val sections = getModuleSections(module)
 
     sections.foldLeft(ModuleStream.header.toBitVector)((section1, section2) => section2 match
@@ -16,7 +15,7 @@ object Serializing:
         section1 ++ WasmCodec.section.encode(sect2).require
       case None =>
         section1
-    ).toByteVector
+    ).toByteArray
 
   private def getModuleSections(module: Module): Vector[Option[Section]] = Vector(
     Some(Section.Types(module.types)),
