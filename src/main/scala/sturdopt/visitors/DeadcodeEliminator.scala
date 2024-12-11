@@ -1,16 +1,17 @@
 package sturdopt.visitors
 
+import sturdopt.util.IfTarget.{AllAlive, AllEmpty, ElseDead, ThenDead}
 import sturdy.language.wasm.abstractions.CfgNode
-import sturdopt.util.{FuncIdx, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
+import sturdopt.util.{FuncIdx, FuncIfTargetsMap, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.{LabelIdx, syntax}
-import swam.syntax.{Block, Br, BrIf, BrTable, Call, Drop, Export, Func, If, Elem, Inst, Loop, i32, GlobalGet}
+import swam.syntax.{Block, Br, BrIf, BrTable, Call, Drop, Elem, Export, Func, GlobalGet, If, Inst, Loop, i32}
 
 /**
   @param funcInstrLocs A Map representing the instructions to be removed
   @param deadLabelMap A Map representing the dead labels
   @return The module with removed deadcode
  */
-class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap) extends BaseModuleVisitor:
+class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap, ifTargets: FuncIfTargetsMap) extends BaseModuleVisitor:
 
   val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
     // A function is dead if it's first instruction is dead
@@ -57,23 +58,45 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
     funcInstr match
       // TODO Instead of using drop to recover the correct stack the instructions that pushed the value on the top of the stack should be removed
       case If(tpe, thenInstr, elseInstr) =>
+        val ifTarget = ifTargets(funcIdx)(funcPc)
         // If the if instruction is dead it is never reached and we don't need to add a drop
         if (instrIsDead(funcIdx)) then
           (thenInstr ++ elseInstr).foreach(visitFuncInstrCounter)
           Seq.empty[Inst]
+        else if (ifTarget == AllAlive) then
+          Seq(If(tpe,
+                    thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths)),
+                    elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))))
+        // Edge case where Then and Else branches are empty from the beginning
+        else if (ifTarget == AllEmpty) then
+          (thenInstr ++ elseInstr).foreach(visitFuncInstrCounter)
+          Seq(Drop)
+        // One of the branches is dead
         else
-          val ifPC = funcPc
-          val optThenInstr = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
-          val optElseInstr = elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
-          if (optThenInstr.isEmpty || optElseInstr.isEmpty) then deadLabelMap.get(funcIdx) match
-            // If just the label of the if instruction is dead it is reached but defaults to one case. Here we need a drop
-            case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(ifPC)) =>
-              Seq(Drop) ++ (optThenInstr++optElseInstr).flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+          deadLabelMap.get(funcIdx) match
+            // Label is dead
+            case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc)) =>
+              val innerInstr = ifTarget match
+                case ThenDead =>
+                  thenInstr.foreach(visitFuncInstrCounter)
+                  elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+                case ElseDead =>
+                  val theninst = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+                  elseInstr.foreach(visitFuncInstrCounter)
+                  theninst
+              Seq(Drop) ++ innerInstr
             case _ =>
+              val innerInstr = ifTarget match
+                case ThenDead =>
+                  thenInstr.foreach(visitFuncInstrCounter)
+                  elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
+                case ElseDead =>
+                  val theninst = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
+                  elseInstr.foreach(visitFuncInstrCounter)
+                  theninst
               // If the if instruction is neither dead nor its label but one of the branches is empty, then it can be removed
               // but we need to replace it with a block since its label is references by some branch
-              Seq(Drop) ++ Seq(Block(tpe, optThenInstr++optElseInstr)) 
-          else Seq(If(tpe, optThenInstr, optElseInstr))
+              Seq(Drop) ++ Seq(Block(tpe, innerInstr))
 
       case Block(tpe, blockInstr) =>
         if (instrIsDead(funcIdx)) then

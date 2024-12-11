@@ -25,14 +25,16 @@ object DeadcodeOptimization:
       interp.runMostGeneralClient(modInst, ConstantAnalysis.typedTop)
     )
 
-    val allNodes = ControlFlow.allCfgNodes(List(modInst))
-    val allInstructions = allNodes.filter(_.isInstruction)
     val deadInstructions = ControlFlow.deadInstruction(cfg, List(modInst))
-    val allLabels = allNodes.filter(_.isInstanceOf[CfgNode.Labled])
+    val aliveInstructions = ControlFlow.allCfgNodes(List(modInst)).filter(_.isInstruction).diff(deadInstructions)
     val deadLabels = ControlFlow.deadLabels(cfg)
+    val allEdges = cfg.getEdges.map {
+      case (from, to) => (from.node, to.keys.map(_.node).toSeq)
+    }
+    val ifTargets = CfgRelatedMethods.getIfTargets(aliveInstructions, allEdges)
     println(s"Dead instructions: ${deadInstructions}")
     println(s"Dead labels: ${deadLabels}")
     val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
     val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
     
-    DeadcodeEliminator(deadFuncInstrMap, deadLabelMap).visitModule(mod)
+    DeadcodeEliminator(deadFuncInstrMap, deadLabelMap, ifTargets).visitModule(mod)
