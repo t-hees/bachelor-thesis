@@ -1,6 +1,6 @@
 package sturdopt.visitors
 
-import sturdopt.util.IfTarget.{AllAlive, AllEmpty, ElseDead, ThenDead}
+import sturdopt.util.IfTarget.{AllAlive, EndLabelTarget, SingleInstructionTarget}
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdopt.util.{FuncIdx, FuncIfTargetsMap, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.{LabelIdx, syntax}
@@ -26,8 +26,8 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
   /**
    * Checks if Instruction at current funcPC in funcIdx is dead
    */
-  private def instrIsDead(funcIdx: FuncIdx): Boolean = funcInstrLocs.get(funcIdx) match
-    case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc) => true
+  private def instrIsDead(funcIdx: FuncIdx, shift: Int = 0): Boolean = funcInstrLocs.get(funcIdx) match
+    case Some(instrIndices: Seq[InstrIdx]) if instrIndices.contains(funcPc+shift) => true
     case _ => false
 
   private def flattenLabelIdx(lbl: LabelIdx, lblDepth: Int, deadLblbDepths: Vector[Int]): LabelIdx =
@@ -67,30 +67,31 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
           Seq(If(tpe,
                     thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths)),
                     elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))))
-        // Edge case where Then and Else branches are empty from the beginning
-        else if (ifTarget == AllEmpty) then
+        // Edge case where Then and Else branches are empty from the beginning or the only reached one is empty
+        else if (ifTarget == EndLabelTarget) then
           (thenInstr ++ elseInstr).foreach(visitFuncInstrCounter)
           Seq(Drop)
-        // One of the branches is dead
+        // One of the branches is dead and ifTarget == InstructionTarget
         else
+          val thenBranchDead: Boolean = (thenInstr.isEmpty || instrIsDead(funcIdx, 1))
           deadLabelMap.get(funcIdx) match
             // Label is dead
             case Some(instrLocMap: Map[LabelInst, Seq[InstrIdx]]) if (instrLocMap(LabelInst.If).contains(funcPc)) =>
-              val innerInstr = ifTarget match
-                case ThenDead =>
+              val innerInstr =
+                if thenBranchDead then
                   thenInstr.foreach(visitFuncInstrCounter)
-                  elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
-                case ElseDead =>
-                  val theninst = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths.appended(lblDepth+1)))
+                  elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth + 1, deadLblDepths.appended(lblDepth + 1)))
+                else
+                  val theninst = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth + 1, deadLblDepths.appended(lblDepth + 1)))
                   elseInstr.foreach(visitFuncInstrCounter)
                   theninst
               Seq(Drop) ++ innerInstr
             case _ =>
-              val innerInstr = ifTarget match
-                case ThenDead =>
+              val innerInstr = 
+                if thenBranchDead then
                   thenInstr.foreach(visitFuncInstrCounter)
                   elseInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
-                case ElseDead =>
+                else  
                   val theninst = thenInstr.flatMap(visitFuncInstr(_, funcIdx, lblDepth+1, deadLblDepths))
                   elseInstr.foreach(visitFuncInstrCounter)
                   theninst
@@ -120,9 +121,9 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
 
       case Call(callFuncidx: FuncIdx) => Seq(Call(shiftFuncIdx(callFuncidx)))
       case Br(lbl: LabelIdx) => Seq(Br(flattenLabelIdx(lbl, lblDepth, deadLblDepths)))
-      // If the BrIf references a dead label then we know it is never executed and can be removed
       case BrIf(lbl: LabelIdx) =>
-        if (deadLblDepths.contains(lblDepth-lbl)) then
+        // TODO for the case of EndLabelTarget determine whether the condition is always reached or never
+        if (ifTargets(funcIdx)(funcPc) == SingleInstructionTarget) then
           Seq(Drop)
         else
           Seq(BrIf(flattenLabelIdx(lbl, lblDepth, deadLblDepths)))

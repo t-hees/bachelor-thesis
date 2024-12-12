@@ -24,4 +24,10 @@
       i32.const 1
     )
   )
+  (func (export "infinite loop")
+    (loop
+      i32.const 1
+      br_if 0
+    )
+  )
 )

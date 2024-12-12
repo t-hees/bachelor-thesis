@@ -1,0 +1,15 @@
+(module
+  (func (export "main") (param i32) (result i32)
+    (block (result i32)
+      i32.const 1
+      local.get 0
+      br_if 0 ;; This br_if jump target is alive
+      drop
+      i32.const 2
+      i32.const 0
+      br_if 0 ;; Ideally this should be optimized to a drop
+      drop
+      i32.const 3
+    )
+  )
+)
