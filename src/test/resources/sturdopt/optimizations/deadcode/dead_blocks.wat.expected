@@ -16,6 +16,7 @@
     i32.const 3
     call $add
     return
+    unreachable
   )
   (func (export "infinite loop")
     (loop

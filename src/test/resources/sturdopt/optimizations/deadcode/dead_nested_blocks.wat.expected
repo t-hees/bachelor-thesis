@@ -7,7 +7,9 @@
         (block (result i32)
           i32.const 1
           br 2
+          unreachable
         )
+        unreachable
       )
     )
   )

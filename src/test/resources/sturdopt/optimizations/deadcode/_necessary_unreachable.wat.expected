@@ -1,0 +1,17 @@
+(module
+  (func $main (result i32)
+    (block (result i32)
+      i32.const 1
+      i32.const 1
+      i32.eq
+      drop
+      (block
+        i32.const 87
+        br 1
+        unreachable
+      )
+      unreachable ;; This unreachable is necessary to preserve the correct block signature!
+    )
+  )
+  (export "main" (func $main))
+)

@@ -13,8 +13,7 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
     deadcodeFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val result = DeadcodeOptimization.eliminateDeadcode(Parsing.fromText(p))
-      println(result)
-      prettyPrintModule(result)
+      //prettyPrintModule(result)
       val expected = Parsing.fromText(Paths.get(p.toString + ".expected"))
       assert(result == expected)
     }
@@ -43,9 +42,5 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
       val result = DeadcodeOptimization.eliminateDeadcode(mod)
       Files.write(Paths.get(output_path), Serializing.serialize(result))
     }
-  }
-
-  test("randomtest") {
-    println(Seq(Some(3), None, Some(3)).appended(None))
   }
 }
