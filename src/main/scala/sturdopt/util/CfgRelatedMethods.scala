@@ -36,16 +36,16 @@ object CfgRelatedMethods {
    * in the form:
    * Map[FuncIdx, Seq[pc in function body]]
    */
-  def getInstNodeLocation(nodes: Set[CfgNode], hostFuncIndices: Vector[Int]): FuncInstrMap = nodes.foldLeft(Map.empty[FuncIdx, Seq[InstrIdx]]) {
+  def getInstNodeLocation(nodes: Set[CfgNode]): FuncInstrMap = nodes.foldLeft(Map.empty[FuncIdx, Seq[InstrIdx]]) {
     case (acc, cfgnode) =>
       getSingleInstLoc(cfgnode) match
         case InFunction(func, pc) =>
-          val indices = acc.getOrElse(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), Seq.empty[InstrIdx])
-          acc.updated(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), indices.appended(pc))
+          val indices = acc.getOrElse(func.funcIx, Seq.empty[InstrIdx])
+          acc.updated(func.funcIx, indices.appended(pc))
         case _ => ???
   }
 
-  def getLabledInstLocation(nodes: Set[CfgNode.Labled], hostFuncIndices: Vector[Int]): FuncLabelMap = nodes.foldLeft(Map.empty[FuncIdx, Map[LabelInst, Seq[InstrIdx]]]) {
+  def getLabledInstLocation(nodes: Set[CfgNode.Labled]): FuncLabelMap = nodes.foldLeft(Map.empty[FuncIdx, Map[LabelInst, Seq[InstrIdx]]]) {
     case (acc, CfgNode.Labled(inst, loc)) =>
       val labelInst: LabelInst = inst match
         case block: swam.syntax.Block => LabelInst.Block
@@ -54,11 +54,11 @@ object CfgRelatedMethods {
 
       loc match
         case InFunction(func, pc) =>
-          val funcMap = acc.getOrElse(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), Map(LabelInst.Block -> Seq.empty[InstrIdx],
+          val funcMap = acc.getOrElse(func.funcIx, Map(LabelInst.Block -> Seq.empty[InstrIdx],
             LabelInst.Loop -> Seq.empty[InstrIdx],
             LabelInst.If -> Seq.empty[InstrIdx]))
           val indices = funcMap(labelInst)
-          acc.updated(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), funcMap.updated(labelInst, indices.appended(pc)))
+          acc.updated(func.funcIx, funcMap.updated(labelInst, indices.appended(pc)))
         case _ => ???
   }
 
@@ -67,7 +67,7 @@ object CfgRelatedMethods {
    * @param edges Edges of cfg
    * @return Map indicating IfTargets for both If and BrIf instructions
    */
-  def getIfTargets(nodes: Set[CfgNode], edges: Map[CfgNode, Seq[CfgNode]], hostFuncIndices: Vector[Int]): FuncIfTargetsMap =
+  def getIfTargets(nodes: Set[CfgNode], edges: Map[CfgNode, Seq[CfgNode]]): FuncIfTargetsMap =
     def getIfTargetsInnerFunction(acc: FuncIfTargetsMap, node: CfgNode, loc: InstLoc) = loc match
       case InFunction(func, pc) =>
         val targetType = edges(node) match
@@ -79,8 +79,8 @@ object CfgRelatedMethods {
             case _ => IfTarget.SingleInstructionTarget
           case Seq(inst: CfgNode) => IfTarget.SingleInstructionTarget
           case _ => throw new IllegalArgumentException(s"Edges from ${node} are of illegal type or node is dead")
-        val innerMap = acc.getOrElse(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), Map.empty[InstrIdx, IfTarget])
-        acc.updated(shiftFuncIdxByHost(func.funcIx, hostFuncIndices), innerMap.updated(pc, targetType))
+        val innerMap = acc.getOrElse(func.funcIx, Map.empty[InstrIdx, IfTarget])
+        acc.updated(func.funcIx, innerMap.updated(pc, targetType))
       case _ => ???
 
     nodes.foldLeft(Map.empty[FuncIdx, Map[InstrIdx, IfTarget]]) {
@@ -96,6 +96,4 @@ object CfgRelatedMethods {
     case CfgNode.Labled(_, loc) => loc
     case other: CfgNode => throw IllegalArgumentException(s"$other is not an instruction!")
     
-  private def shiftFuncIdxByHost(funcIdx: FuncIdx, hostFuncIndices: Vector[Int]): FuncIdx =
-    funcIdx - hostFuncIndices.count(_ < funcIdx)
 }

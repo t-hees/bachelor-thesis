@@ -1,0 +1,17 @@
+(module
+  (type (;0;) (func (param i32 i32) (result i32)))
+  (import "wasi_unstable" "args_sizes_get" (func (type 0)))
+  (import "wasi_unstable" "args_get" (func (type 0)))
+  (func (type 0) (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.add)
+  (func $unused_add (type 0) (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    i32.add)
+  (func (export "main") (result i32)
+    i32.const 2
+    i32.const 3
+    call 2)
+)

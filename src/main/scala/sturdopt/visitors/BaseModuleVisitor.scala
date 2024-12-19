@@ -9,9 +9,11 @@ trait BaseModuleVisitor:
   var funcPc: Int = 0
 
   def visitModule(mod: Module) =
+    val impFuncAmount = mod.imported.funcs.size
     Module(
       mod.types.flatMap(visitType),
-      mod.funcs.zipWithIndex.flatMap(visitFunc),
+      // The index gets shifted by the amount of imported functions since those always come before!
+      mod.funcs.zipWithIndex.flatMap((func, funcIdx) => visitFunc(func, funcIdx+impFuncAmount)),
       mod.tables,
       mod.mems,
       mod.globals.flatMap(visitGlobal),

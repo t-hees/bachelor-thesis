@@ -34,12 +34,8 @@ object DeadcodeOptimization:
     val allEdges = cfg.getEdges.map {
       case (from, to) => (from.node, to.keys.map(_.node).toSeq)
     }
-    // These are needed for shifting because they are not counted in the functions Vector of swam Modules which are used for the optimization 
-    val hostFunctionIndices: Vector[Int] = modInst.functions.zipWithIndex.collect {
-      case (func: FunctionInstance.Host, idx) => idx
-    }
-    val ifTargets = CfgRelatedMethods.getIfTargets(aliveInstructions, allEdges, hostFunctionIndices)
-    val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions, hostFunctionIndices)
-    val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels, hostFunctionIndices)
+    val ifTargets = CfgRelatedMethods.getIfTargets(aliveInstructions, allEdges)
+    val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
+    val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
     
     DeadcodeEliminator(deadFuncInstrMap, deadLabelMap, ifTargets).visitModule(mod)
