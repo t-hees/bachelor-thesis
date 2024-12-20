@@ -1,10 +1,9 @@
 package sturdopt.optimizations
 
-import sturdopt.Parsing
+import sturdopt.{Parsing, Serializing, TestUtil}
 import sturdopt.Parsing.WasmParseTimeout
-import sturdopt.Serializing
 import sturdopt.Serializing.prettyPrintModule
-import sturdopt.TestUtil.{deadcodeFiles, wasmbenchFiles, timedTest}
+import sturdopt.TestUtil.{deadcodeFiles, timedTest, wasmbenchFiles}
 
 import java.nio.file.{Files, Paths, StandardOpenOption}
 
@@ -20,6 +19,7 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
   }
 
   test("Validate after optimization") {
+    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(461)
     wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val testFun: () => Unit = () => {

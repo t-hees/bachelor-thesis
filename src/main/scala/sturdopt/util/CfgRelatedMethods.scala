@@ -71,14 +71,16 @@ object CfgRelatedMethods {
     def getIfTargetsInnerFunction(acc: FuncIfTargetsMap, node: CfgNode, loc: InstLoc) = loc match
       case InFunction(func, pc) =>
         val targetType = edges(node) match
-          case nodes: Seq[CfgNode] if (nodes.size == 2) => IfTarget.AllAlive
+          // Somehow for Wasmbench file 83c55f871d03aafe4e021787d2a1701dd959c4eb51eb2f9bab0e312e2d9f9108.wasm
+          // there is a brIF with 3 targets (2 of them being Block end labels in another function?) so we use >= 2 instead of == 2
+          case targetNodes: Seq[CfgNode] if (targetNodes.size >= 2) => IfTarget.AllAlive
           case Seq(lblEnd: CfgNode.LabledEnd) => IfTarget.EndLabelTarget
           // LoopJumpTarget if the targeted loop appears before the brIf instruction
           case Seq(CfgNode.Labled(loop: Loop, loopLoc: InstLoc)) => loopLoc match
             case InFunction(_, loopPc) if loopPc < pc => IfTarget.LoopJumpTarget
             case _ => IfTarget.SingleInstructionTarget
           case Seq(inst: CfgNode) => IfTarget.SingleInstructionTarget
-          case _ => throw new IllegalArgumentException(s"Edges from ${node} are of illegal type or node is dead")
+          case targetNodes: Seq[CfgNode] => throw new IllegalArgumentException(s"Target nodes ${targetNodes} from ${node} are of illegal type or node is dead")
         val innerMap = acc.getOrElse(func.funcIx, Map.empty[InstrIdx, IfTarget])
         acc.updated(func.funcIx, innerMap.updated(pc, targetType))
       case _ => ???
