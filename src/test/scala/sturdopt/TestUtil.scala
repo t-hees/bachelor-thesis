@@ -12,7 +12,11 @@ object TestUtil {
   val deadcodeFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/optimizations/deadcode").toURI))
     .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
 
-  def timedTest(testFun: () => Unit, timeLimit: Duration = 60.seconds): Unit =
+  /**
+   * Run test function with timeout
+   * @return False if timed out, else True
+   */
+  def timedTest(testFun: () => Unit, timeLimit: Duration = 60.seconds): Boolean =
     var threadException: Option[Throwable] = None
     try {
       val t = new Thread(new Runnable {
@@ -20,7 +24,6 @@ object TestUtil {
           try {
             testFun()
           } catch {
-            case e : InterruptedException => // do nothing
             case e: Throwable => threadException = Some(e)
           }
       })
@@ -32,10 +35,10 @@ object TestUtil {
         t.stop()
         println(s"\u001B[33mTest timed out after ${timeLimit.toSeconds} seconds\u001B[0m")
     } catch {
-      case e: InterruptedException => // do nothing
       case e: OutOfMemoryError => System.gc()
     }
     threadException match
+      case Some(e: InterruptedException) => false
       case Some(e: Throwable) => throw e
-      case None => // do nothing
+      case None => true
 }

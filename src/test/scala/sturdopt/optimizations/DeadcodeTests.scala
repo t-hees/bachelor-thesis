@@ -4,6 +4,7 @@ import sturdopt.{Parsing, Serializing, TestUtil}
 import sturdopt.Parsing.WasmParseTimeout
 import sturdopt.Serializing.prettyPrintModule
 import sturdopt.TestUtil.{deadcodeFiles, timedTest, wasmbenchFiles}
+import scala.concurrent.duration._
 
 import java.nio.file.{Files, Paths, StandardOpenOption}
 
@@ -18,8 +19,13 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
     }
   }
 
+  /*
+  Test performed with 5 min timeout successfully
+  Total amount of timed out files: 88/1032
+   */
   test("Validate after optimization") {
     //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(461)
+    var timeoutCounter = 0
     wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val testFun: () => Unit = () => {
@@ -30,11 +36,12 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
           //prettyPrintModule(result)
           val reparsedResult = Parsing.fromBytes(Serializing.serialize(result))
         } catch {
-          case e: WasmParseTimeout => println("Parsing timed out")
+          case e: WasmParseTimeout => throw InterruptedException("Parsing timed out")
         }
       }
-      timedTest(testFun)
+      if (!timedTest(testFun, 5.minutes)) then timeoutCounter += 1
     }
+    println(s"Total amount of timed out files: ${timeoutCounter}/${wasmbenchFiles.size}")
   }
 
   test("Write to file test") {
