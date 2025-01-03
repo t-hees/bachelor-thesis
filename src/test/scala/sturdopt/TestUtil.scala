@@ -11,6 +11,8 @@ object TestUtil {
     .toScala(List).filter(p => consideredFilesNames.exists(p.endsWith(_))).sorted((a, b) => java.lang.Long.compare(Files.size(a), Files.size(b)))
   val deadcodeFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/optimizations/deadcode").toURI))
     .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
+  val constantsFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/optimizations/constants").toURI))
+    .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
 
   /**
    * Run test function with timeout

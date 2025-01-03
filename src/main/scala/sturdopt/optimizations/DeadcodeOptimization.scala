@@ -18,7 +18,6 @@ object DeadcodeOptimization:
     val stackConfig = StackConfig.StackedStates()
     val interp = new ConstantAnalysis.Instance(FrameData.empty, Iterable.empty, WasmConfig(ctx = Insensitive, fix = FixpointConfig(fix.iter.Config.Innermost(StackConfig.StackedStates()))))
     val cfg = ConstantAnalysis.controlFlow(CfgConfig.AllNodes(false), interp)
-    val constants = ConstantAnalysis.constantInstructions(interp)
 
     val modInst = interp.initializeModule(mod)
     val res = interp.failure.fallible(

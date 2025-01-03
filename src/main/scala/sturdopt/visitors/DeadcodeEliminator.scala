@@ -53,7 +53,7 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
    * @param block The body of a block, loop or if branch
    */
   private def visitBlockBody(blockBody: Vector[Inst], funcIdx: FuncIdx, lblDepth: Int, deadLblDepths: Vector[Int]): Vector[Inst] =
-    val result = blockBody.flatMap(visitFuncInstr(_, funcIdx, lblDepth, deadLblDepths))
+    val result = blockBody.flatMap(visitFuncInstrExtended(_, funcIdx, lblDepth, deadLblDepths))
     blockIsDead = false
     result
 
@@ -64,9 +64,9 @@ class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap
     else
       funcPc = -1
       blockIsDead = false
-      Seq(Func(func.tpe, func.locals.flatMap(visitFuncLocal(_, funcIdx)), func.body.flatMap(visitFuncInstr(_, funcIdx))))
+      Seq(Func(func.tpe, func.locals.flatMap(visitFuncLocal(_, funcIdx)), func.body.flatMap(visitFuncInstrExtended(_, funcIdx))))
 
-  override def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx, lblDepth: Int = 0, deadLblDepths: Vector[Int] = Vector.empty[Int]): Seq[Inst] =
+  private def visitFuncInstrExtended(funcInstr: Inst, funcIdx: FuncIdx, lblDepth: Int = 0, deadLblDepths: Vector[Int] = Vector.empty[Int]): Seq[Inst] =
     if blockIsDead then
       visitFuncInstrCounter(funcInstr)
       Seq.empty[Inst]

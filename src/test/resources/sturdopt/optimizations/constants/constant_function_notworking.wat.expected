@@ -1,0 +1,12 @@
+(module
+  (type $func_type (func (param i32) (result i32)))
+  (func $const_func (type $func_type)
+    local.get 0
+    local.get 0
+    i32.sub ;; Sturdy doesn't seem to recognize that this is constant
+  )
+  (func (export "main") (type $func_type)
+    local.get 0
+    call $const_func
+  )
+)

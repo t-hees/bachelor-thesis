@@ -3,6 +3,7 @@ package sturdopt.util
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdy.language.wasm.generic.InstLoc
 import sturdy.language.wasm.generic.InstLoc.InFunction
+import sturdy.language.wasm.analyses.ConstantAnalysis.Value
 import swam.syntax.Loop
 
 type FuncIdx = Int
@@ -90,6 +91,17 @@ object CfgRelatedMethods {
         case CfgNode.Labled(inst: swam.syntax.If, loc) => getIfTargetsInnerFunction(acc, node, loc)
         case CfgNode.Instruction(inst: swam.syntax.BrIf, loc) => getIfTargetsInnerFunction(acc, node, loc)
         case _ => acc
+    }
+
+  def getConstantsMap(constants: Map[InstLoc, List[Value]]): Map[FuncIdx, Map[InstrIdx, Value]] =
+    constants.foldLeft(Map.empty[FuncIdx, Map[InstrIdx, Value]]) {
+      case (acc, (instLoc -> values)) =>
+        if (values.size == 1) then instLoc match
+          case InFunction(func, pc) =>
+            val innerMap = acc.getOrElse(func.funcIx, Map.empty[InstrIdx, Value])
+            acc.updated(func.funcIx, innerMap.updated(pc, values.head))
+          case _ => ???
+        else acc
     }
 
   private def getSingleInstLoc(node: CfgNode): InstLoc = node match

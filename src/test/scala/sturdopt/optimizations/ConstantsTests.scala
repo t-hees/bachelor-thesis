@@ -1,28 +1,24 @@
 package sturdopt.optimizations
 
-import sturdopt.{Parsing, Serializing, TestUtil}
 import sturdopt.Parsing.WasmParseTimeout
 import sturdopt.Serializing.prettyPrintModule
-import sturdopt.TestUtil.{deadcodeFiles, timedTest, wasmbenchFiles}
-import scala.concurrent.duration._
+import sturdopt.TestUtil.{constantsFiles, timedTest, wasmbenchFiles}
+import sturdopt.{Parsing, Serializing, TestUtil}
 
 import java.nio.file.{Files, Paths, StandardOpenOption}
+import scala.concurrent.duration.*
 
-class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
+class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
   test("Manual test assertions") {
-    deadcodeFiles.zipWithIndex.foreach { (p, idx) =>
+    constantsFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
-      val result = DeadcodeOptimization.eliminateDeadcode(Parsing.fromText(p))
+      val result = ConstantsOptimization.replaceConstants(Parsing.fromText(p))
       //prettyPrintModule(result)
       val expected = Parsing.fromText(Paths.get(p.toString + ".expected"))
       assert(result == expected)
     }
   }
 
-  /*
-  Test performed with 5 min timeout successfully
-  Total amount of timed out files: 88/1032
-   */
   test("Validate after optimization") {
     //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(461)
     var timeoutCounter = 0
@@ -32,7 +28,7 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
         try {
           val mod = Parsing.fromBinary(p)
           //prettyPrintModule(mod)
-          val result = DeadcodeOptimization.eliminateDeadcode(mod)
+          val result = ConstantsOptimization.replaceConstants(mod)
           //prettyPrintModule(result)
           val reparsedResult = Parsing.fromBytes(Serializing.serialize(result))
         } catch {
@@ -50,7 +46,7 @@ class DeadcodeTests extends org.scalatest.funsuite.AnyFunSuite {
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val output_path = p.toString + ".optimized"
       val mod = Parsing.fromBinary(p)
-      val result = DeadcodeOptimization.eliminateDeadcode(mod)
+      val result = ConstantsOptimization.replaceConstants(mod)
       Files.write(Paths.get(output_path), Serializing.serialize(result))
     }
   }
