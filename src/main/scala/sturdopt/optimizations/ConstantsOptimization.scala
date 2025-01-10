@@ -24,5 +24,6 @@ object ConstantsOptimization:
     val res = interp.failure.fallible(
       interp.runMostGeneralClient(modInst, ConstantAnalysis.typedTop)
     )
-
-    ConstantReplacer(getConstantsMap(constants.get)).visitModule(mod)
+    val constantsGet = constants.get
+    println(s"Constants: ${constantsGet}")
+    ConstantReplacer(mod, getConstantsMap(constantsGet)).visitModule()

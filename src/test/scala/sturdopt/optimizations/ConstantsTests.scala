@@ -13,7 +13,7 @@ class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
     constantsFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val result = ConstantsOptimization.replaceConstants(Parsing.fromText(p))
-      //prettyPrintModule(result)
+      prettyPrintModule(result)
       val expected = Parsing.fromText(Paths.get(p.toString + ".expected"))
       assert(result == expected)
     }

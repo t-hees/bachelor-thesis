@@ -1,0 +1,21 @@
+(module
+  (func (export "main") (result i32)
+    i32.const 1
+    i32.const 2
+    drop
+    drop
+    i32.const 3
+
+    i32.const 5
+    i32.const 5
+    drop
+    drop
+    i32.const 0
+    drop
+    i32.const 1
+
+    drop
+    drop
+    i32.const 0
+  )
+)

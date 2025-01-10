@@ -37,4 +37,4 @@ object DeadcodeOptimization:
     val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
     val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
     
-    DeadcodeEliminator(deadFuncInstrMap, deadLabelMap, ifTargets).visitModule(mod)
+    DeadcodeEliminator(mod, deadFuncInstrMap, deadLabelMap, ifTargets).visitModule()

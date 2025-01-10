@@ -1,0 +1,20 @@
+(module
+  (memory $memory 1)
+  (func $store_func
+    i32.const 0
+    i32.const 5
+    i32.store
+  )
+  (func (export "other_store_func") (param i32)
+    i32.const 0
+    local.get 0
+    i32.store
+  )
+  (func (export "main") (result i32)
+    call $store_func
+
+    i32.const 0
+    drop
+    i32.const 5
+  )
+)

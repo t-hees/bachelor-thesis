@@ -4,14 +4,14 @@ import sturdopt.util.IfTarget.{AllAlive, EndLabelTarget, SingleInstructionTarget
 import sturdy.language.wasm.abstractions.CfgNode
 import sturdopt.util.{FuncIdx, FuncIfTargetsMap, FuncInstrMap, FuncLabelMap, InstrIdx, LabelInst}
 import swam.{LabelIdx, syntax}
-import swam.syntax.{Unreachable, Block, Br, BrIf, BrTable, Call, Drop, Elem, Export, Func, GlobalGet, If, Inst, Loop, i32}
+import swam.syntax.{Unreachable, Block, Br, BrIf, BrTable, Call, Drop, Elem, Export, Func, GlobalGet, If, Inst, Loop, i32, Module}
 
 /**
   @param funcInstrLocs A Map representing the instructions to be removed
   @param deadLabelMap A Map representing the dead labels
   @return The module with removed deadcode
  */
-class DeadcodeEliminator(funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap, ifTargets: FuncIfTargetsMap) extends BaseModuleVisitor:
+class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap, ifTargets: FuncIfTargetsMap) extends BaseModuleVisitor(mod):
 
   val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
     // A function is dead if it's first instruction is dead

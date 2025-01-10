@@ -4,11 +4,11 @@ import sturdopt.util.{FuncIdx, InstrIdx}
 import swam.{FuncType, LabelIdx, ValType}
 import swam.syntax.{Br, BrIf, BrTable, Elem, Export, Func, Global, Import, Inst, Module}
 
-trait BaseModuleVisitor:
+class BaseModuleVisitor(mod: Module):
   
   var funcPc: Int = 0
 
-  def visitModule(mod: Module) =
+  def visitModule() =
     val impFuncAmount = mod.imported.funcs.size
     Module(
       mod.types.flatMap(visitType),
