@@ -13,6 +13,8 @@ object TestUtil {
     .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
   val constantsFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/optimizations/constants").toURI))
     .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
+  val dropsFiles = Files.list(Paths.get(this.getClass.getResource("/sturdopt/optimizations/drops").toURI))
+    .toScala(List).filter(p => p.toString.endsWith(".wat")).sorted
 
   /**
    * Run test function with timeout

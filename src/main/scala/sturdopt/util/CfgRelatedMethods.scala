@@ -41,8 +41,8 @@ object CfgRelatedMethods {
     case (acc, cfgnode) =>
       getSingleInstLoc(cfgnode) match
         case InFunction(func, pc) =>
-          val indices = acc.getOrElse(func.funcIx, Seq.empty[InstrIdx])
-          acc.updated(func.funcIx, indices.appended(pc))
+          val indices = acc.getOrElse(func.funcIx, List.empty[InstrIdx])
+          acc.updated(func.funcIx, indices.prepended(pc))
         case _ => ???
   }
 
@@ -55,11 +55,11 @@ object CfgRelatedMethods {
 
       loc match
         case InFunction(func, pc) =>
-          val funcMap = acc.getOrElse(func.funcIx, Map(LabelInst.Block -> Seq.empty[InstrIdx],
-            LabelInst.Loop -> Seq.empty[InstrIdx],
-            LabelInst.If -> Seq.empty[InstrIdx]))
+          val funcMap = acc.getOrElse(func.funcIx, Map(LabelInst.Block -> List.empty[InstrIdx],
+            LabelInst.Loop -> List.empty[InstrIdx],
+            LabelInst.If -> List.empty[InstrIdx]))
           val indices = funcMap(labelInst)
-          acc.updated(func.funcIx, funcMap.updated(labelInst, indices.appended(pc)))
+          acc.updated(func.funcIx, funcMap.updated(labelInst, indices.prepended(pc)))
         case _ => ???
   }
 
@@ -104,10 +104,21 @@ object CfgRelatedMethods {
         else acc
     }
 
+  def getNeededDrops(drops: Map[CfgNode, Int]): Map[FuncIdx, Seq[(InstrIdx, Int)]] = drops.foldLeft(Map.empty[FuncIdx, Seq[(InstrIdx, Int)]]) {
+    case (acc, (cfgnode -> amount)) =>
+      getSingleInstLoc(cfgnode) match
+        case InFunction(func, pc) =>
+          val indices = acc.getOrElse(func.funcIx, List.empty[(InstrIdx, Int)])
+          acc.updated(func.funcIx, indices.prepended((pc, amount)))
+        case _ => ???
+  }
+
   private def getSingleInstLoc(node: CfgNode): InstLoc = node match
     case CfgNode.Instruction(_, loc) => loc
     case CfgNode.Call(_, loc) => loc
     case CfgNode.Labled(_, loc) => loc
+    case CfgNode.LabledEnd(CfgNode.Labled(_, loc)) => loc
+    case CfgNode.CallReturn(CfgNode.Call(_, loc)) => loc
     case other: CfgNode => throw IllegalArgumentException(s"$other is not an instruction!")
     
 }
