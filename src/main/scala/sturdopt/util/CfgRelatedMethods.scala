@@ -43,7 +43,7 @@ object CfgRelatedMethods {
         case InFunction(func, pc) =>
           val indices = acc.getOrElse(func.funcIx, List.empty[InstrIdx])
           acc.updated(func.funcIx, indices.prepended(pc))
-        case _ => ???
+        case _ => acc
   }
 
   def getLabledInstLocation(nodes: Set[CfgNode.Labled]): FuncLabelMap = nodes.foldLeft(Map.empty[FuncIdx, Map[LabelInst, Seq[InstrIdx]]]) {
@@ -60,7 +60,7 @@ object CfgRelatedMethods {
             LabelInst.If -> List.empty[InstrIdx]))
           val indices = funcMap(labelInst)
           acc.updated(func.funcIx, funcMap.updated(labelInst, indices.prepended(pc)))
-        case _ => ???
+        case _ => acc
   }
 
   /**
@@ -84,7 +84,7 @@ object CfgRelatedMethods {
           case targetNodes: Seq[CfgNode] => throw new IllegalArgumentException(s"Target nodes ${targetNodes} from ${node} are of illegal type or node is dead")
         val innerMap = acc.getOrElse(func.funcIx, Map.empty[InstrIdx, IfTarget])
         acc.updated(func.funcIx, innerMap.updated(pc, targetType))
-      case _ => ???
+      case _ => acc
 
     nodes.foldLeft(Map.empty[FuncIdx, Map[InstrIdx, IfTarget]]) {
       case (acc, node) => node match
@@ -100,7 +100,7 @@ object CfgRelatedMethods {
           case InFunction(func, pc) =>
             val innerMap = acc.getOrElse(func.funcIx, Map.empty[InstrIdx, Value])
             acc.updated(func.funcIx, innerMap.updated(pc, values.head))
-          case _ => ???
+          case _ => acc
         else acc
     }
 
@@ -110,7 +110,7 @@ object CfgRelatedMethods {
         case InFunction(func, pc) =>
           val indices = acc.getOrElse(func.funcIx, List.empty[(InstrIdx, Int)])
           acc.updated(func.funcIx, indices.prepended((pc, amount)))
-        case _ => ???
+        case _ => acc
   }
 
   private def getSingleInstLoc(node: CfgNode): InstLoc = node match

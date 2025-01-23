@@ -13,13 +13,13 @@ import swam.syntax.{Unreachable, Block, Br, BrIf, BrTable, Call, Drop, Elem, Exp
  */
 class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap, ifTargets: FuncIfTargetsMap) extends BaseModuleVisitor(mod):
 
-  val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
+  private val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
     // A function is dead if it's first instruction is dead
     case (funcIdx: FuncIdx, instrIndices: Seq[InstrIdx]) if instrIndices.contains(0) => funcIdx
   }.toSeq
 
   // indicates if the rest of the current block/loop/if-branch is dead and an unreachable has already been placed
-  var blockIsDead: Boolean = false
+  private var blockIsDead: Boolean = false
 
   /**
     shifts funcIdx to account for the removal of deadFunctions

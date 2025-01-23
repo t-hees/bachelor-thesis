@@ -1,0 +1,28 @@
+(module
+  (type $func_type (func (param i32 i32) (result i32)))
+  (table 2 funcref)
+  (elem (i32.const 0) $const_func $return_3)
+  (func $const_func (type $func_type) ;; This type must remain $func_type after optimization since it is in a table
+    i32.const 3
+    i32.const 9
+    drop
+    drop
+    i32.const 12
+  )
+  (func $return_3 (result i32)
+    i32.const 3
+  )
+  (func (export "main") (result i32)
+    i32.const 1 ;; table idx
+    drop
+    i32.const 3
+
+    i32.const 9
+
+    i32.const 0 ;; table idx
+    drop
+    drop
+    drop
+    i32.const 12
+  )
+)

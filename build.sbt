@@ -1,6 +1,6 @@
 val swamCommit = "39999a1751076c6dbfe2a92c874f17683730d14e"
 val swam = uri(s"https://gitlab.rlp.net/plmz/external/swam.git#$swamCommit")
-val sturdyCommit = "314931464dd32e021334205a031dea68640bc218"
+val sturdyCommit = "ae529ddfe7069ee2b6224979238278bd454d4e1f"
 val sturdy = uri(s"https://gitlab.rlp.net/plmz/sturdy.scala.git#$sturdyCommit")
 
 lazy val root = (project in file("."))

@@ -1,6 +1,6 @@
 (module
   (type $func_type (func (param i32) (result i32)))
-  (func $const_func (type $func_type)
+  (func $const_func (result i32)
     i32.const 3
     i32.const 3
     drop
@@ -11,8 +11,8 @@
     i32.const 3
   )
   (func (export "main") (result i32)
-    call $return_3
-    call $const_func
-    ;; Both calls are somehow not recognized as constant by sturdy...
+    i32.const 3
+    drop
+    i32.const 0
   )
 )

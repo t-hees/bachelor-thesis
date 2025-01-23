@@ -8,7 +8,7 @@ class BaseModuleVisitor(mod: Module):
   
   var funcPc: Int = 0
 
-  def visitModule() =
+  def visitModule(): Module =
     val impFuncAmount = mod.imported.funcs.size
     Module(
       mod.types.flatMap(visitType),
