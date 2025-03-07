@@ -21,7 +21,7 @@ class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
   }
 
   test("Validate after optimization") {
-    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(461)
+    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(198)
     var timeoutCounter = 0
     wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")

@@ -22,7 +22,7 @@
     i32.const 5
     call $add_func
 
-    local.get 0
+    i32.const 3
     i32.const 4
     i32.const 5
     call $set_func

@@ -10,12 +10,16 @@
     i32.add
   )
   (func $set_func (type $new_type)
-    local.get 0
+    i32.const 3
     local.tee 1 ;; This parameters is tee'd so it can't be removed anymore
-    local.get 1
-    i32.add
+    i32.const 3
+    drop
+    drop
+    i32.const 6
     i32.const 5
-    i32.add
+    drop
+    drop
+    i32.const 11
   )
   (func (export "main") (type $main_type)
     local.get 0
@@ -25,11 +29,13 @@
     drop
     call $add_func
 
-    local.get 0
+    i32.const 3
     i32.const 4
     i32.const 5
     drop
-    call $set_func
+    drop
+    drop
+    i32.const 11
 
     i32.add
   )

@@ -3,7 +3,7 @@ package sturdopt.visitors
 import sturdopt.util.*
 import sturdy.language.wasm.analyses.ConstantAnalysis.Value
 import swam.syntax.*
-import swam.{LabelIdx, ValType, syntax}
+import swam.{FuncType, LabelIdx, TypeIdx, ValType, syntax}
 import sturdy.language.wasm.Interpreter
 import sturdy.language.wasm.analyses.ConstantAnalysis.ConstantInstructionsLogger
 import sturdy.language.wasm.generic.InstLoc.InFunction
@@ -74,7 +74,6 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
         case Some(const: Inst) => Seq(Drop, Drop, Drop, const)
         case None => Seq(selectInst)
 
-      // Note: Sturdy currently doesn't seem to report constant calls
       case call: (Call | CallIndirect) => getConstantValue(funcIdx) match
         case Some(const: Inst) =>
           val paramSize: Int = call match
@@ -84,3 +83,82 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
         case None => Seq(call)
 
       case _ => Seq(funcInstr)
+
+  /**
+   * This subclass is intended to be used by the ConstantReplacer class to remove constant parameters
+   * @param constParams The integers of parameters of every function that is declared constant. These values are supposed to
+   *                  come from the constant instruction removal and still need to be filtered
+   */
+  private class ConstantParameterRemover(mod: Module, constParams: Map[FuncIdx, Set[Int]]) extends BaseModuleVisitor(mod):
+
+    private val remParams: Map[FuncIdx, Set[Int]] = constParams.filterNot((funcIdx: FuncIdx, _) =>
+      // Only non imported functions that aren't referenced in any table (indirect call parameters removal not supported)
+      (funcIdx < mod.imported.funcs.size) || mod.elem.exists{ case Elem(_, _, init) => init.contains(funcIdx)}
+    ).map((funcIdx: FuncIdx, paramIndices: Set[Int]) =>
+      // Only remove constant parameters sequentially from the back until one is not constant
+      if paramIndices.isEmpty then (funcIdx, paramIndices)
+      else (funcIdx, paramIndices.max.to(0, -1).takeWhile(paramIndices.contains).toSet)
+    )
+    private var newTypes: Vector[FuncType] = mod.types
+    private val funcTypeMapping: scala.collection.mutable.Map[FuncIdx, TypeIdx] = scala.collection.mutable.Map.empty[FuncIdx, TypeIdx]
+    private val callDrops: Map[FuncIdx, Int] = remParams.map((funcIdx: FuncIdx, remParamIndices: Set[Int]) =>
+      val oldFuncType: FuncType = mod.types(mod.funcs(funcIdx - mod.imported.funcs.size).tpe)
+      val newFuncType: FuncType = FuncType(
+        oldFuncType.params.zipWithIndex.filter((_, idx) => !remParams(funcIdx).contains(idx)).map(_._1),
+        oldFuncType.t
+      )
+      funcTypeMapping(funcIdx) = newTypes.indexOf(newFuncType) match
+        case -1 => // case when the new required type with removed parameters doesn't exist yet
+          newTypes = newTypes.appended(newFuncType)
+          newTypes.size - 1
+        case typeIdx: TypeIdx => typeIdx
+      (funcIdx, oldFuncType.params.size - newFuncType.params.size)
+    )
+
+    override def visitModule(): Module =
+      val impFuncAmount = mod.imported.funcs.size
+      Module(
+        newTypes,
+        // The index gets shifted by the amount of imported functions since those always come before!
+        mod.funcs.zipWithIndex.flatMap((func, funcIdx) => visitFunc(func, funcIdx+impFuncAmount)),
+        mod.tables,
+        mod.mems,
+        mod.globals.flatMap(visitGlobal),
+        mod.elem.flatMap(visitElem),
+        mod.data,
+        mod.start,
+        mod.imports.flatMap(visitImport),
+        mod.exports.flatMap(visitExport)
+      )
+
+    override def visitFunc(func: Func, funcIdx: Int): Seq[Func] =
+      funcPc = -1
+      Seq(Func(funcTypeMapping.getOrElse(funcIdx, func.tpe), // set the new function types
+        func.locals.flatMap(visitFuncLocal(_, funcIdx)),
+        func.body.flatMap(visitFuncInstr(_, funcIdx))))
+
+    override def visitFuncInstr(funcInstr: Inst, funcIdx: FuncIdx): Seq[Inst] =
+      funcPc += 1
+      funcInstr match
+        case If(tpe, thenInstr, elseInstr) => Seq(
+          If(tpe, thenInstr.flatMap(visitFuncInstr(_, funcIdx)), elseInstr.flatMap(visitFuncInstr(_, funcIdx)))
+        )
+        case Block(tpe, blockInstr) => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx))))
+        case Loop(tpe, loopInstr) => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
+
+        case Call(calledIdx: FuncIdx) => Seq.fill(callDrops.getOrElse(calledIdx, 0))(Drop) ++ Seq(Call(calledIdx))
+
+        case LocalGet(localIdx) =>
+          // Remove local instructions that reference a removed parameter. Assuming that the constant instruction
+          // removal worked as expected this should only apply to unreachable local instructions
+          if remParams.getOrElse(funcIdx, Set.empty).contains(localIdx) then Seq(Unreachable)
+          // Otherwise shift the referenced localIdx by the removed parameters
+          else Seq(LocalGet(localIdx - remParams.getOrElse(funcIdx, Set.empty).count(_ < localIdx)))
+        case LocalSet(localIdx) => // same as localGet
+          if remParams.getOrElse(funcIdx, Set.empty).contains(localIdx) then Seq(Unreachable)
+          else Seq(LocalSet(localIdx - remParams.getOrElse(funcIdx, Set.empty).count(_ < localIdx)))
+        case LocalTee(localIdx) => // same as localGet
+          if remParams.getOrElse(funcIdx, Set.empty).contains(localIdx) then Seq(Unreachable)
+          else Seq(LocalTee(localIdx - remParams.getOrElse(funcIdx, Set.empty).count(_ < localIdx)))
+
+        case _ => Seq(funcInstr)
