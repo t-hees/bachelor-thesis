@@ -111,7 +111,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
       if paramIndices.isEmpty then (funcIdx, paramIndices)
       else (funcIdx, paramIndices.max.to(0, -1).takeWhile(paramIndices.contains).toSet)
     )
-    private val newTypes: scala.collection.mutable.ArrayBuffer[FuncType] = mod.types.to(scala.collection.mutable.ArrayBuffer)
+    private val updatedTypes: scala.collection.mutable.ArrayBuffer[FuncType] = mod.types.to(scala.collection.mutable.ArrayBuffer)
     private val funcTypeMapping: scala.collection.mutable.Map[FuncIdx, TypeIdx] = scala.collection.mutable.Map.empty[FuncIdx, TypeIdx]
     private val callDrops: Map[FuncIdx, Int] = remParams.map((funcIdx: FuncIdx, remParamIndices: Set[Int]) =>
       val oldFuncType: FuncType = mod.types(mod.funcs(funcIdx - mod.imported.funcs.size).tpe)
@@ -119,10 +119,10 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
         oldFuncType.params.zipWithIndex.filter((_, idx) => !remParams(funcIdx).contains(idx)).map(_._1),
         oldFuncType.t
       )
-      funcTypeMapping(funcIdx) = newTypes.indexOf(newFuncType) match
+      funcTypeMapping(funcIdx) = updatedTypes.indexOf(newFuncType) match
         case -1 => // case when the new required type with removed parameters doesn't exist yet
-          newTypes += newFuncType
-          newTypes.size - 1
+          updatedTypes += newFuncType
+          updatedTypes.size - 1
         case typeIdx: TypeIdx => typeIdx
       (funcIdx, oldFuncType.params.size - newFuncType.params.size)
     )
@@ -130,7 +130,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
     override def visitModule(): Module =
       val impFuncAmount = mod.imported.funcs.size
       Module(
-        newTypes.toVector,
+        updatedTypes.toVector,
         // The index gets shifted by the amount of imported functions since those always come before!
         mod.funcs.zipWithIndex.flatMap((func, funcIdx) => visitFunc(func, funcIdx+impFuncAmount)),
         mod.tables,
