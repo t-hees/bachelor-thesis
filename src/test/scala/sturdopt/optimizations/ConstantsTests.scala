@@ -51,5 +51,10 @@ class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
       Files.write(Paths.get(output_path), Serializing.serialize(result))
     }
   }
-}
 
+  test("random") {
+    val opt: Option[Int] = None
+    def shiftFuncIdx(funcIdx: Int): Int = funcIdx - 234
+    println(opt.map(shiftFuncIdx))
+  }
+}

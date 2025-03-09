@@ -15,6 +15,19 @@ import swam.syntax.{AConst, Binop, Convertop, Drop, Func, GlobalGet, Inst, LoadI
 object DropsOptimization:
 
   def eliminateDrops(mod: Module): Module =
+    val (removableInstructions, neededDrops, _) = getDropsAnalysisResults(mod)
+    DropsRemover(mod, removableInstructions, neededDrops).visitModule()
+
+  /**
+   * Remove drops and also return the amount of added drops during the entire optimization
+   *
+   * @return (optimized_mod, drops_amt)
+   */
+  def eliminateDropsVerbose(mod: Module): (Module, Int) =
+    val (removableInstructions, neededDrops, totalAddedDrops) = getDropsAnalysisResults(mod)
+    (DropsRemover(mod, removableInstructions, neededDrops).visitModule(), totalAddedDrops)
+
+  private def getDropsAnalysisResults(mod: Module): (FuncInstrMap, Map[FuncIdx, Seq[(InstrIdx, Int)]], Int) =
     val stackConfig = StackConfig.StackedStates()
     val interp = new ConstantAnalysis.Instance(FrameData.empty, Iterable.empty, WasmConfig(ctx = Insensitive, fix = FixpointConfig(fix.iter.Config.Innermost(StackConfig.StackedStates()))))
     val cfg = ConstantAnalysis.controlFlow(CfgConfig.AllNodes(false), interp)
@@ -29,13 +42,16 @@ object DropsOptimization:
     }
 
     val dropsAnalysis = new DropsAnalysis(reverseEdges)
-    val (removableInstructions, neededDrops) = dropsAnalysis.analyseDrops()
+    dropsAnalysis.analyseDrops()
 
-    DropsRemover(mod, removableInstructions, neededDrops).visitModule()
 
   
   private class DropsAnalysis(revEdges: Map[CfgNode, Seq[CfgNode]]):
     private class StackChangeUnsupported(msg: String) extends Exception(msg)
+
+    // This variable is just used for optional information and serves no purpose for the optimization
+    var totalAddedDrops: Int = 0
+
     // Indicates if stack element optional or mandatory. Optional ones can be removed
     enum StackType: 
       case Opt, Mnd
@@ -47,14 +63,14 @@ object DropsOptimization:
     //var neededDrops = Map.empty[FuncIdx, Seq[(InstrIdx, Int)]]
     val neededDrops = scala.collection.mutable.Map.empty[CfgNode, Int]
 
-    def analyseDrops(): (FuncInstrMap, Map[FuncIdx, Seq[(InstrIdx, Int)]]) =
+    def analyseDrops(): (FuncInstrMap, Map[FuncIdx, Seq[(InstrIdx, Int)]], Int) =
       val drops = revEdges.keys.filter(_ match
         case CfgNode.Instruction(Drop ,_) => true
         case _ => false
       )
       drops.foreach( d => if !remInst.contains(d) then processBackwards(d) )
       remInst.foreach(_)
-      (CfgRelatedMethods.getInstNodeLocation(remInst.toSet), CfgRelatedMethods.getNeededDrops(neededDrops.toMap))
+      (CfgRelatedMethods.getInstNodeLocation(remInst.toSet), CfgRelatedMethods.getNeededDrops(neededDrops.toMap), totalAddedDrops)
 
     def processBackwards(node: CfgNode, stack: Seq[StackType] = List.empty[StackType]): Unit =
       try {
@@ -71,6 +87,7 @@ object DropsOptimization:
         if newStack.nonEmpty then revEdges(node).foreach(processBackwards(_, newStack))
       } catch {
         case e: StackChangeUnsupported =>
+          totalAddedDrops += stack.size
           neededDrops(node) = stack.size
       }
 
@@ -81,9 +98,9 @@ object DropsOptimization:
     def stackChange(node: CfgNode): (Int, Int, StackType) = node match
       case CfgNode.Instruction(inst: Inst, _) => inst match
         // while nop technically doesn't consume or produce anything it doesn't matter for the implementation
-        case _: (Unop | Testop | Convertop) | Nop => (1, 1, StackType.Opt)
+        case _: (Unop | Testop | Convertop | LoadInst | LoadNInst) | Nop => (1, 1, StackType.Opt)
         case _: (Binop | Relop) => (2, 1, StackType.Opt)
-        case _: (AConst | LoadInst | LoadNInst) | LocalGet(_) | GlobalGet(_) => (0, 1, StackType.Opt)
+        case _: AConst | LocalGet(_) | GlobalGet(_) => (0, 1, StackType.Opt)
         // TODO Implement store (with StackType.Mnd)
         case Select => (3, 1, StackType.Opt)
         case Drop => (1, 0, StackType.Opt)

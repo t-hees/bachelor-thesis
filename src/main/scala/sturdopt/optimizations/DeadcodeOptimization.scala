@@ -15,6 +15,18 @@ import sturdy.language.wasm.generic.InstLoc.InFunction
 object DeadcodeOptimization:
 
   def eliminateDeadcode(mod: Module): Module =
+    getOptimizationClass(mod).visitModule()
+
+  /**
+   * Elliminate deadcode and also return the amount of added drops and unreachables during the entire optimization
+   * @return (optimized_mod, drops_amt, unreachables_amt)
+   */
+  def eliminateDeadcodeVerbose(mod: Module): (Module, Int, Int) =
+    val deadcodeEliminator = getOptimizationClass(mod)
+    val result = deadcodeEliminator.visitModule()
+    (result, deadcodeEliminator.totalAddedDrops, deadcodeEliminator.totalAddedUnreachables)
+
+  private def getOptimizationClass(mod: Module): DeadcodeEliminator =
     val stackConfig = StackConfig.StackedStates()
     val interp = new ConstantAnalysis.Instance(FrameData.empty, Iterable.empty, WasmConfig(ctx = Insensitive, fix = FixpointConfig(fix.iter.Config.Innermost(StackConfig.StackedStates()))))
     val cfg = ConstantAnalysis.controlFlow(CfgConfig.AllNodes(false), interp)
@@ -36,5 +48,5 @@ object DeadcodeOptimization:
     val ifTargets = CfgRelatedMethods.getIfTargets(aliveInstructions, allEdges)
     val deadFuncInstrMap = CfgRelatedMethods.getInstNodeLocation(deadInstructions)
     val deadLabelMap = CfgRelatedMethods.getLabledInstLocation(deadLabels)
-    
-    DeadcodeEliminator(mod, deadFuncInstrMap, deadLabelMap, ifTargets).visitModule()
+
+    DeadcodeEliminator(mod, deadFuncInstrMap, deadLabelMap, ifTargets)

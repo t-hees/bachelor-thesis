@@ -13,6 +13,15 @@ import swam.syntax.{Unreachable, Block, Br, BrIf, BrTable, Call, Drop, Elem, Exp
  */
 class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap: FuncLabelMap, ifTargets: FuncIfTargetsMap) extends BaseModuleVisitor(mod):
 
+  /** 
+   * A global variable that holds the total amount of added drops during the entire optimization
+   */
+  var totalAddedDrops: Int = 0
+  /**
+   * A global variable that holds the total amount of added unreachables during the entire optimization
+   */
+  var totalAddedUnreachables: Int = 0
+
   private val deadFunctions: Seq[FuncIdx] = funcInstrLocs.collect {
     // A function is dead if it's first instruction is dead
     case (funcIdx: FuncIdx, instrIndices: Seq[InstrIdx]) if instrIndices.contains(0) => funcIdx
@@ -73,6 +82,7 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
     else if instrIsDead(funcIdx, 1) then
       visitFuncInstrCounter(funcInstr)
       blockIsDead = true
+      totalAddedUnreachables += 1
       Seq(Unreachable) // Unreachables are needed here to preserve signatures of block, etc in some cases
     else
       funcPc += 1
@@ -90,6 +100,7 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
           // Edge case where Then and Else branches are empty from the beginning or the only reached one is empty
           else if (ifTarget == EndLabelTarget) then
             (thenInstr ++ elseInstr).foreach(visitFuncInstrCounter)
+            totalAddedDrops += 1
             Seq(Drop)
           // One of the branches is dead and ifTarget == InstructionTarget
           else
@@ -105,6 +116,7 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
                     val theninst = visitBlockBody(thenInstr, funcIdx, lblDepth + 1, deadLblDepths.appended(lblDepth + 1))
                     elseInstr.foreach(visitFuncInstrCounter)
                     theninst
+                totalAddedDrops += 1
                 Seq(Drop) ++ innerInstr
               case _ =>
                 val innerInstr =
@@ -117,6 +129,7 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
                     theninst
                 // If the if instruction is neither dead nor its label but one of the branches is empty, then it can be removed
                 // but we need to replace it with a block since its label is references by some branch
+                totalAddedDrops += 1
                 Seq(Drop) ++ Seq(Block(tpe, innerInstr))
 
         case Block(tpe, blockInstr) =>
@@ -136,6 +149,7 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
         case BrIf(lbl: LabelIdx) =>
           // TODO for the case of EndLabelTarget determine whether the condition is always reached or never
           if (ifTargets(funcIdx)(funcPc) == SingleInstructionTarget || deadLblDepths.contains(lblDepth-lbl)) then
+            totalAddedDrops += 1
             Seq(Drop)
           else
             Seq(BrIf(flattenLabelIdx(lbl, lblDepth, deadLblDepths)))
@@ -146,6 +160,8 @@ class DeadcodeEliminator(mod: Module, funcInstrLocs: FuncInstrMap, deadLabelMap:
       }
 
   override def visitExport(exprt: Export): Seq[Export] = Seq(Export(exprt.fieldName, exprt.kind, shiftFuncIdx(exprt.index)))
+
+  override def visitStart(start: FuncIdx): FuncIdx = shiftFuncIdx(start)
 
   /**
    * Shift the elem function reference indices and use offsets to keep them in the same position in the table

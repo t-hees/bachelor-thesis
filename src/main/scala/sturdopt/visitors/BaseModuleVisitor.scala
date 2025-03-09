@@ -19,7 +19,7 @@ class BaseModuleVisitor(mod: Module):
       mod.globals.flatMap(visitGlobal),
       mod.elem.flatMap(visitElem),
       mod.data,
-      mod.start,
+      mod.start.map(visitStart),
       mod.imports.flatMap(visitImport),
       mod.exports.flatMap(visitExport)
     )
@@ -41,7 +41,9 @@ class BaseModuleVisitor(mod: Module):
   def visitImport(imprt: Import): Seq[Import] = Seq(imprt)
 
   def visitExport(exprt: Export): Seq[Export] = Seq(exprt)
-  
+
   def visitElem(elem: Elem): Seq[Elem] = Seq(Elem(elem.table, elem.offset, elem.init.flatMap(visitElemInit)))
   
   def visitElemInit(funcidx: FuncIdx): Seq[FuncIdx] = Seq(funcidx)
+
+  def visitStart(start: FuncIdx) = start

@@ -10,6 +10,11 @@ import sturdy.language.wasm.generic.InstLoc.InFunction
 
 class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]]) extends BaseModuleVisitor(mod):
 
+  /**
+   * A global variable that holds the total amount of added drops during the entire optimization
+   */
+  var totalAddedDrops: Int = 0
+  
   // noGetParams: Indices of params in a function of which the local.gets have been declared as constant
   // setParams: Indices of params in a function which are used by a set/tee. Those can not be removed!
   private val noGetParams, setParams: Map[FuncIdx, scala.collection.mutable.Set[Int]] =
@@ -46,11 +51,15 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
       case Loop(tpe, loopInstr) => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
 
       case unop: (Unop | Testop | LoadInst) => getConstantValue(funcIdx) match
-        case Some(const: Inst) => Seq(Drop, const)
+        case Some(const: Inst) => 
+          totalAddedDrops += 1
+          Seq(Drop, const)
         case None => Seq(unop)
 
       case binop: (Binop | Relop) => getConstantValue(funcIdx) match
-        case Some(const: Inst) => Seq(Drop, Drop, const)
+        case Some(const: Inst) => 
+          totalAddedDrops += 2
+          Seq(Drop, Drop, const)
         case None => Seq(binop)
 
       case LocalGet(localIdx) => getConstantValue(funcIdx) match
@@ -71,7 +80,9 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
         case None => Seq(getInst)
 
       case selectInst: Select.type => getConstantValue(funcIdx) match
-        case Some(const: Inst) => Seq(Drop, Drop, Drop, const)
+        case Some(const: Inst) => 
+          totalAddedDrops += 3
+          Seq(Drop, Drop, Drop, const)
         case None => Seq(selectInst)
 
       case call: (Call | CallIndirect) => getConstantValue(funcIdx) match
@@ -79,6 +90,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
           val paramSize: Int = call match
             case Call(callFuncIdx) => getFuncParams(callFuncIdx).size
             case CallIndirect(typeidx) => mod.types(typeidx).params.size + 1 // +1 because of the table index
+          totalAddedDrops += paramSize  
           Seq.fill(paramSize)(Drop) ++ Seq(const)
         case None => Seq(call)
 
@@ -99,7 +111,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
       if paramIndices.isEmpty then (funcIdx, paramIndices)
       else (funcIdx, paramIndices.max.to(0, -1).takeWhile(paramIndices.contains).toSet)
     )
-    private var newTypes: Vector[FuncType] = mod.types
+    private val newTypes: scala.collection.mutable.ArrayBuffer[FuncType] = mod.types.to(scala.collection.mutable.ArrayBuffer)
     private val funcTypeMapping: scala.collection.mutable.Map[FuncIdx, TypeIdx] = scala.collection.mutable.Map.empty[FuncIdx, TypeIdx]
     private val callDrops: Map[FuncIdx, Int] = remParams.map((funcIdx: FuncIdx, remParamIndices: Set[Int]) =>
       val oldFuncType: FuncType = mod.types(mod.funcs(funcIdx - mod.imported.funcs.size).tpe)
@@ -109,7 +121,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
       )
       funcTypeMapping(funcIdx) = newTypes.indexOf(newFuncType) match
         case -1 => // case when the new required type with removed parameters doesn't exist yet
-          newTypes = newTypes.appended(newFuncType)
+          newTypes += newFuncType
           newTypes.size - 1
         case typeIdx: TypeIdx => typeIdx
       (funcIdx, oldFuncType.params.size - newFuncType.params.size)
@@ -118,7 +130,7 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
     override def visitModule(): Module =
       val impFuncAmount = mod.imported.funcs.size
       Module(
-        newTypes,
+        newTypes.toVector,
         // The index gets shifted by the amount of imported functions since those always come before!
         mod.funcs.zipWithIndex.flatMap((func, funcIdx) => visitFunc(func, funcIdx+impFuncAmount)),
         mod.tables,
@@ -146,7 +158,10 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
         case Block(tpe, blockInstr) => Seq(Block(tpe, blockInstr.flatMap(visitFuncInstr(_, funcIdx))))
         case Loop(tpe, loopInstr) => Seq(Loop(tpe, loopInstr.flatMap(visitFuncInstr(_, funcIdx))))
 
-        case Call(calledIdx: FuncIdx) => Seq.fill(callDrops.getOrElse(calledIdx, 0))(Drop) ++ Seq(Call(calledIdx))
+        case Call(calledIdx: FuncIdx) => 
+          val dropAmnt = callDrops.getOrElse(calledIdx, 0)
+          totalAddedDrops += dropAmnt
+          Seq.fill(dropAmnt)(Drop) ++ Seq(Call(calledIdx))
 
         case LocalGet(localIdx) =>
           // Remove local instructions that reference a removed parameter. Assuming that the constant instruction
