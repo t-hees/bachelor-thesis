@@ -28,7 +28,7 @@ class Benchmark extends org.scalatest.funsuite.AnyFunSuite {
    * Apply every optimization in order, validate the result and write benchmark results to csv file
    */
   test("Write benchmark") {
-    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(336)
+    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(368)
     var timeoutCounter = 0
     val fileWriter =  new FileWriter(s"${System.currentTimeMillis()}.csv", true)
     wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>

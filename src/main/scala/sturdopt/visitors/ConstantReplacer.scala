@@ -103,28 +103,30 @@ class ConstantReplacer(mod: Module, constants: Map[FuncIdx, Map[InstrIdx, Value]
    */
   private class ConstantParameterRemover(mod: Module, constParams: Map[FuncIdx, Set[Int]]) extends BaseModuleVisitor(mod):
 
-    private val remParams: Map[FuncIdx, Set[Int]] = constParams.filterNot((funcIdx: FuncIdx, _) =>
+    private val updatedTypes: scala.collection.mutable.ArrayBuffer[FuncType] = mod.types.to(scala.collection.mutable.ArrayBuffer)
+    private val remParams: scala.collection.mutable.Map[FuncIdx, Set[Int]] = scala.collection.mutable.Map.empty[FuncIdx ,Set[Int]]
+    private val funcTypeMapping: scala.collection.mutable.Map[FuncIdx, TypeIdx] = scala.collection.mutable.Map.empty[FuncIdx, TypeIdx]
+    private val callDrops: scala.collection.mutable.Map[FuncIdx, Int] = scala.collection.mutable.Map.empty[FuncIdx, Int]
+    
+    constParams.filterNot((funcIdx: FuncIdx, paramIndices: Set[Int]) =>
+      paramIndices.isEmpty ||
       // Only non imported functions that aren't referenced in any table (indirect call parameters removal not supported)
       (funcIdx < mod.imported.funcs.size) || mod.elem.exists{ case Elem(_, _, init) => init.contains(funcIdx)}
-    ).map((funcIdx: FuncIdx, paramIndices: Set[Int]) =>
-      // Only remove constant parameters sequentially from the back until one is not constant
-      if paramIndices.isEmpty then (funcIdx, paramIndices)
-      else (funcIdx, paramIndices.max.to(0, -1).takeWhile(paramIndices.contains).toSet)
-    )
-    private val updatedTypes: scala.collection.mutable.ArrayBuffer[FuncType] = mod.types.to(scala.collection.mutable.ArrayBuffer)
-    private val funcTypeMapping: scala.collection.mutable.Map[FuncIdx, TypeIdx] = scala.collection.mutable.Map.empty[FuncIdx, TypeIdx]
-    private val callDrops: Map[FuncIdx, Int] = remParams.map((funcIdx: FuncIdx, remParamIndices: Set[Int]) =>
+    ).foreach((funcIdx: FuncIdx, paramIndices: Set[Int]) =>
       val oldFuncType: FuncType = mod.types(mod.funcs(funcIdx - mod.imported.funcs.size).tpe)
+      // Only remove constant parameters sequentially from the back until one is not constant
+      val actualRemParams = (oldFuncType.params.size-1).to(0, -1).takeWhile(paramIndices.contains).toSet
       val newFuncType: FuncType = FuncType(
-        oldFuncType.params.zipWithIndex.filter((_, idx) => !remParams(funcIdx).contains(idx)).map(_._1),
+        oldFuncType.params.zipWithIndex.filterNot((_, idx) => actualRemParams.contains(idx)).map(_._1),
         oldFuncType.t
       )
+      remParams(funcIdx) = actualRemParams
       funcTypeMapping(funcIdx) = updatedTypes.indexOf(newFuncType) match
         case -1 => // case when the new required type with removed parameters doesn't exist yet
           updatedTypes += newFuncType
           updatedTypes.size - 1
         case typeIdx: TypeIdx => typeIdx
-      (funcIdx, oldFuncType.params.size - newFuncType.params.size)
+      callDrops(funcIdx) = oldFuncType.params.size - newFuncType.params.size
     )
 
     override def visitModule(): Module =

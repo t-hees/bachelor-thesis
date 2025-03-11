@@ -21,7 +21,7 @@ class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
   }
 
   test("Validate after optimization") {
-    //val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(198)
+    val wasmbenchFiles = TestUtil.wasmbenchFiles.drop(368)
     var timeoutCounter = 0
     wasmbenchFiles.zipWithIndex.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
@@ -42,7 +42,7 @@ class ConstantsTests extends org.scalatest.funsuite.AnyFunSuite {
   }
 
   test("Write to file test") {
-    val files = wasmbenchFiles.zipWithIndex.filter{ (p, idx) => idx == 336 }
+    val files = wasmbenchFiles.zipWithIndex.filter{ (p, idx) => idx == 368 }
     files.foreach { (p, idx) =>
       println(s"${idx}/${wasmbenchFiles.size-1}: $p")
       val output_path = p.toString + ".optimized"
